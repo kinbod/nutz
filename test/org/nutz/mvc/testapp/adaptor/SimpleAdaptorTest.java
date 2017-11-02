@@ -34,6 +34,42 @@ public class SimpleAdaptorTest extends BaseWebappTest {
     }
 
     @Test
+    public void test_err_param_anywhere() {
+        get("/adaptor/err/param/anywhere?id=ABC");
+        assertEquals(200, resp.getStatus());
+
+        get("/adaptor/err/param/anywhere/ABC");
+        assertEquals(200, resp.getStatus());
+    }
+
+    @Test
+    public void test_err_param_with_pathargs() {
+        get("/adaptor/err/param/pathargs/a?id=ABC");
+        assertEquals(200, resp.getStatus());
+
+        get("/adaptor/err/param/pathargs/a/ABC");
+        assertEquals(200, resp.getStatus());
+    }
+
+    @Test
+    public void test_multi_err_ctxs() {
+        get("/adaptor/multi/err/ctxs/a?id=ABC");
+        assertEquals(200, resp.getStatus());
+
+        get("/adaptor/multi/err/ctxs/a/ABC");
+        assertEquals(200, resp.getStatus());
+    }
+
+    @Test
+    public void test_multi_err_ctxs2() {
+        get("/adaptor/multi/err/ctxs2/a/b?id=ABC");
+        assertEquals(200, resp.getStatus());
+
+        get("/adaptor/multi/err/ctxs2/a/b/ABC");
+        assertEquals(200, resp.getStatus());
+    }
+
+    @Test
     public void test_json_map_type() {
         resp = post("/adaptor/json/type", "{'abc': 123456}");
         if (resp.getStatus() != 200) {
@@ -106,7 +142,19 @@ public class SimpleAdaptorTest extends BaseWebappTest {
         assertEquals(200, get("/adaptor/param_without_param").getStatus());
         assertEquals("[\"1\", \"2\", \"4\", \"3\"]".replaceAll(" ", ""), get("/adaptor/param_without_param?uids=1,2,4,3").getContent().replaceAll(" ", ""));
     }
-    
+
+    @Test
+    public void test_object_without_param() {
+        assertEquals(200, get("/adaptor/object_without_param").getStatus());
+        assertEquals("{\"name\": \"object\"}".replaceAll(" ", ""), get("/adaptor/object_without_param?name=object").getContent().replaceAll(" ", ""));
+    }
+
+    @Test
+    public void test_path_args_and_object_without_param() {
+        assertEquals(200, get("/adaptor/path_args_and_object_without_param/1").getStatus());
+        assertEquals("{\"name\": \"1\"}".replaceAll(" ", ""), get("/adaptor/path_args_and_object_without_param/1?name=object").getContent().replaceAll(" ", ""));
+    }
+
     @Test
     public void issue_1069() {
         resp = post("/adaptor/issue1069", "");
@@ -134,6 +182,16 @@ public class SimpleAdaptorTest extends BaseWebappTest {
         String str = resp.getContent();
         Issue1277 issue = Json.fromJson(Issue1277.class, str);
         assertEquals("abc", issue.name);
+        assertEquals(123, issue.age);
+        //assertEquals("1495667792000", resp.getContent());
+    }
+    
+    @Test
+    public void issue_1310() {
+        resp = post("/adaptor/issue1310", new NutMap("age", "123"));
+        assertEquals(200, resp.getStatus());
+        String str = resp.getContent();
+        Issue1277 issue = Json.fromJson(Issue1277.class, str);
         assertEquals(123, issue.age);
         //assertEquals("1495667792000", resp.getContent());
     }

@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 import org.nutz.lang.Lang;
 import org.nutz.lang.Strings;
+import org.nutz.lang.Xmls;
 import org.nutz.lang.meta.Pair;
 
 /**
@@ -29,8 +30,7 @@ public class Tag extends SimpleNode<HtmlToken> {
     public static Tag text(String text) {
         Tag tag = new Tag();
         if (null != text) {
-            text = text.replace("&", "&amp;");
-            text = text.replace("<", "&lt;").replace(">", "&gt;");
+            text = Strings.escapeHtml(text);
         }
         tag.set(new HtmlToken().setValue(text));
         return tag;
@@ -349,4 +349,26 @@ public class Tag extends SimpleNode<HtmlToken> {
             sb.append(' ').append(attr.toString());
     }
 
+    @SuppressWarnings("rawtypes")
+    public void toXml(StringBuilder sb, int level) {
+        if (level == 0)
+            sb.append(Xmls.HEAD);
+        if (sb.length() > 2 && sb.charAt(sb.length() - 1) != '\n')
+            sb.append("\r\n");
+        if (level > 0)
+            sb.append(Strings.dup(' ', level*2));
+        __join_tag_begin(sb, this);
+        if (getChildren().size() == 1) {
+            sb.append(getText());
+        }
+        else if (hasChild()) {
+            for (Node node : getChildren()) {
+                node.toXml(sb, level+1);
+            }
+            if (level > 0)
+                sb.append(Strings.dup(' ', level*2));
+        }
+        __join_tag_end(sb, this);
+        sb.append("\r\n");
+    }
 }

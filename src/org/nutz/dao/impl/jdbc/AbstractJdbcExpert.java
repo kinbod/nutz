@@ -299,7 +299,12 @@ public abstract class AbstractJdbcExpert implements JdbcExpert {
             sb.append("Create Index ");
         if (index.getName().contains("$"))
             sb.append(TableName.render(new CharSegment(index.getName())));
-        else
+        else if (index.getName().isEmpty()) {
+            sb.append(index.isUnique() ? "UX_" : "IX_");
+            sb.append(en.getTableName());
+            for (EntityField field : index.getFields())
+                sb.append("_").append(field.getName());
+        } else
             sb.append(index.getName());
         sb.append(" ON ").append(en.getTableName()).append("(");
         for (EntityField field : index.getFields()) {
@@ -337,7 +342,7 @@ public abstract class AbstractJdbcExpert implements JdbcExpert {
         // 字段注释
         if (en.hasColumnComment()) {
             for (MappingField mf : en.getMappingFields()) {
-                if (mf.hasColumnComment()) {
+                if (mf.hasColumnComment() && !mf.isReadonly()) {
                     Sql columnCommentSQL = Sqls.create(Strings.isBlank(commentColumn) ? DEFAULT_COMMENT_COLUMN
                                                                                       : commentColumn);
                     columnCommentSQL.vars()

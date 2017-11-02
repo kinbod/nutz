@@ -24,6 +24,7 @@ import org.nutz.dao.entity.EntityMaker;
 import org.nutz.dao.entity.LinkField;
 import org.nutz.dao.entity.LinkVisitor;
 import org.nutz.dao.entity.MappingField;
+import org.nutz.dao.entity.PkType;
 import org.nutz.dao.entity.Record;
 import org.nutz.dao.impl.link.DoClearLinkVisitor;
 import org.nutz.dao.impl.link.DoClearRelationByHostFieldLinkVisitor;
@@ -709,8 +710,7 @@ public class NutDao extends DaoSupport implements Dao {
                 pojo.append(((Criteria) cnd).where());
                 // MySQL/PgSQL/SqlServer 与 Oracle/H2的结果会不一样,奇葩啊
                 GroupBy gb = ((Criteria) cnd).getGroupBy();
-                if (gb != null)
-                    pojo.append(gb);
+                pojo.append(gb);
             }
             // 否则暴力获取 WHERE 子句
             else {
@@ -1014,6 +1014,10 @@ public class NutDao extends DaoSupport implements Dao {
     	Entity<?> en = getEntity(obj.getClass());
     	List<String> names = new ArrayList<String>();
     	for (MappingField mf : en.getMappingFields()) {
+    	    if (mf.isName() || mf.isPk() || mf.isId()) {
+                names.add(mf.getName());
+    	        continue;
+    	    }
     		Object tmp = mf.getValue(obj);
 			if (ignoreNull && tmp == null) {
 				continue;
@@ -1066,6 +1070,18 @@ public class NutDao extends DaoSupport implements Dao {
     public <T> T insertOrUpdate(T t, FieldFilter insertFieldFilter, FieldFilter updateFieldFilter) {
         if (t == null)
             return null;
+        Object obj = Lang.first(t);
+        Entity<?> en = getEntity(obj.getClass());
+        if (en.getPkType() == PkType.NAME) {
+            MappingField mf = en.getNameField();
+            Object val = mf.getValue(obj);
+            if (val == null || fetch(obj.getClass(), Cnd.where(mf.getName(), "=", val)) == null) {
+                insert(t, insertFieldFilter);
+            } else {
+                update(t, updateFieldFilter);
+            }
+            return t;
+        }
         if (fetch(t) != null)
             update(t, updateFieldFilter);
         else
@@ -1179,5 +1195,31 @@ public class NutDao extends DaoSupport implements Dao {
     
     public EntityHolder getEntityHolder() {
         return holder;
+    }
+    
+    public <T> T insert(T obj, String actived) {
+        Object first = Lang.first(obj);
+        if (null == first)
+            return null;
+
+        if (Strings.isBlank(actived))
+            return insert(obj);
+        
+        return insert(obj, FieldFilter.create(first.getClass(), actived));
+    }
+    
+    @Override
+    public void truncate(Class<?> klass) {
+        Entity<?> en = getEntity(klass);
+        truncate(en.getTableName());
+    }
+    
+    @Override
+    public void truncate(String tableName) {
+        if (!exists(tableName))
+            return;
+        Sql sql = Sqls.createf("TRUNCATE TABLE %s", tableName);
+        _exec(sql);
+        return;
     }
 }

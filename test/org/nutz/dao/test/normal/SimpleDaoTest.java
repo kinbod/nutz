@@ -28,6 +28,7 @@ import org.nutz.castor.Castors;
 import org.nutz.dao.Chain;
 import org.nutz.dao.Cnd;
 import org.nutz.dao.Condition;
+import org.nutz.dao.DB;
 import org.nutz.dao.Dao;
 import org.nutz.dao.DaoException;
 import org.nutz.dao.FieldFilter;
@@ -52,6 +53,7 @@ import org.nutz.dao.test.meta.Abc;
 import org.nutz.dao.test.meta.Base;
 import org.nutz.dao.test.meta.ColDefineUser;
 import org.nutz.dao.test.meta.DynamicTable;
+import org.nutz.dao.test.meta.IssuePkVersion;
 import org.nutz.dao.test.meta.Master;
 import org.nutz.dao.test.meta.Pet;
 import org.nutz.dao.test.meta.PetObj;
@@ -70,6 +72,10 @@ import org.nutz.dao.test.meta.issue1179.Issue1179;
 import org.nutz.dao.test.meta.issue1179.Issue1179Enum;
 import org.nutz.dao.test.meta.issue1254.BookTag;
 import org.nutz.dao.test.meta.issue1284.Issue1284;
+import org.nutz.dao.test.meta.issue1297.DumpData;
+import org.nutz.dao.test.meta.issue1297.Issue1297;
+import org.nutz.dao.test.meta.issue1302.Issue1302Master;
+import org.nutz.dao.test.meta.issue1302.Issue1302UserAction;
 import org.nutz.dao.test.meta.issue396.Issue396Master;
 import org.nutz.dao.test.meta.issue726.Issue726;
 import org.nutz.dao.test.meta.issue901.XPlace;
@@ -78,6 +84,7 @@ import org.nutz.dao.test.meta.issue928.BeanWithSet;
 import org.nutz.dao.util.Daos;
 import org.nutz.dao.util.blob.SimpleBlob;
 import org.nutz.dao.util.blob.SimpleClob;
+import org.nutz.dao.util.cri.SimpleCriteria;
 import org.nutz.json.Json;
 import org.nutz.lang.Files;
 import org.nutz.lang.Lang;
@@ -1005,5 +1012,101 @@ public class SimpleDaoTest extends DaoCase {
         Issue1284 bean = new Issue1284();
         bean.setAge(20);
         dao.insert(bean);
+    }
+    
+    @Test
+    public void test_issue_insert_or_update() {
+        try {
+            dao.create(Issue1297.class, false);
+            Issue1297 pojo = new Issue1297();
+            pojo.setCt(new Timestamp(System.currentTimeMillis()));
+            pojo.setKeySn("ABC");
+            pojo.setUserid(123);
+            dao.insertOrUpdate(pojo);
+        }
+        catch (RuntimeException e) {
+            e.printStackTrace();
+            throw e;
+        }
+        
+        try {
+            dao.create(DumpData.class, true);
+            DumpData dump = new DumpData();
+            dump.setId(R.UU32());
+            dump.setTitle("ABC");
+            dao.insertOrUpdate(dump);
+            dump.setTitle("DDD");
+            dao.insertOrUpdate(dump);
+            assertEquals(1, dao.count(DumpData.class));
+            assertEquals("DDD", dao.fetch(DumpData.class).getTitle());
+        } catch (Exception e) {
+            // TODO: handle exception
+        }
+    }
+    
+    @Test
+    public void test_issue_1302() {
+            dao.create(Issue1302Master.class, false);
+            Issue1302Master pojo = new Issue1302Master();
+            pojo.setName(R.UU32());
+            pojo.setAct(Issue1302UserAction.VIEW);
+            dao.insert(pojo);
+            System.out.println(DB.SQLSERVER.ordinal());
+            pojo = dao.fetch(Issue1302Master.class, pojo.getName());
+            assertEquals(Issue1302UserAction.VIEW, pojo.getAct());
+    }
+    
+
+    @Test
+    public void test_truncate() {
+            // 建好表,插入10条记录
+            dao.create(Pet.class, false);
+            dao.insert(Pet.create(10));
+            assertTrue(dao.count(Pet.class) > 0);
+            
+            // 干掉
+            dao.truncate(Pet.class);
+            assertTrue(dao.count(Pet.class) == 0);
+            
+            // 再插入10条记录
+            dao.insert(Pet.create(10));
+            assertTrue(dao.count(Pet.class) > 0);
+            
+            //再干掉
+            dao.truncate(dao.getEntity(Pet.class).getTableName());
+            assertTrue(dao.count(Pet.class) == 0);
+    }
+    
+    @Test
+    public void test_issue1342() {
+        if (!dao.meta().isMySql())
+            return;
+        if (dao.exists("t_issue_1342"))
+            dao.drop("t_issue_1342");
+        dao.execute(Sqls.create("create table t_issue_1342(id INT AUTO_INCREMENT,order_day DATETIME NOT NULL, PRIMARY KEY(id, order_day)) "
+                + "PARTITION BY RANGE(YEAR(order_day)) ("
+                + "PARTITION p_2017 VALUES LESS THAN (2017),"
+                + "PARTITION p_catchall VALUES LESS THAN MAXVALUE)"));
+        dao.query("t_issue_1342", new SimpleCriteria("partition(p_2017)"));
+    }
+    
+    @Test
+    public void test_pk_version() {
+        dao.create(IssuePkVersion.class, true);
+        for (int i = 0; i < 10; i++) {
+            IssuePkVersion v = new IssuePkVersion();
+            v.setName("abc_" + i);
+            v.setAge(i);
+            v.setPrice(i*100);
+            v.setVersion(0);
+            dao.insert(v);
+        }
+        assertEquals(10, dao.count(IssuePkVersion.class));
+        IssuePkVersion ve = dao.fetchx(IssuePkVersion.class, "abc_1", 1);
+        assertNotNull(ve);
+        ve.setPrice(99);
+        dao.updateWithVersion(ve);
+        ve = dao.fetchx(IssuePkVersion.class, "abc_1", 1);
+        assertEquals(99, ve.getPrice());
     }
 }
