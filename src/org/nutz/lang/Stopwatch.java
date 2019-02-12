@@ -1,7 +1,7 @@
 package org.nutz.lang;
 
-import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -145,8 +145,8 @@ public class Stopwatch {
         String prefix = String.format("Total: %d%s : [%s]=>[%s]",
                                       this.getDuration(),
                                       (nano ? "ns" : "ms"),
-                                      Times.sDTms(new Date(from)),
-                                      Times.sDTms(new Date(to)));
+                                      Times.sDTms2(new Date(from)),
+                                      Times.sDTms2(new Date(to)));
         if (tags == null)
             return prefix;
         StringBuilder sb = new StringBuilder(prefix).append("\r\n");
@@ -163,7 +163,7 @@ public class Stopwatch {
 
     public StopTag tag(String name) {
         if (tags == null)
-            tags = new ArrayList<Stopwatch.StopTag>();
+            tags = new LinkedList<Stopwatch.StopTag>();
         lastTag = new StopTag(name, System.currentTimeMillis(), lastTag);
         tags.add(lastTag);
         return lastTag;

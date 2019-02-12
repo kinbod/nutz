@@ -3,9 +3,15 @@ package org.nutz.lang;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
+import java.util.Locale;
+import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.nutz.lang.util.Regex;
 
 /**
  * 一些时间相关的帮助函数
@@ -76,7 +82,7 @@ public abstract class Times {
      */
     public static TmInfo Ti(int sec) {
         TmInfo ti = new TmInfo();
-        ti.valueInMillisecond = (int) sec * 1000;
+        ti.valueInMillisecond = sec * 1000;
         ti.__recound_by_valueInMilliSecond();
         return ti;
     }
@@ -185,6 +191,7 @@ public abstract class Times {
             this.second = Math.min(59, this.value - (this.hour * 3600) - (this.minute * 60));
         }
 
+        @Override
         public String toString() {
             String fmt = "HH:mm";
             // 到毫秒
@@ -436,6 +443,7 @@ public abstract class Times {
      * 
      * @deprecated since 1.b.49 util 1.b.51
      */
+    @Deprecated
     public static long ms(String ds, TimeZone tz) {
         return ams(ds, tz);
     }
@@ -499,7 +507,7 @@ public abstract class Times {
     public static String mss(int ms) {
         int sec = ms / 1000;
         ms = ms - sec * 1000;
-        return secs((int) sec) + "." + Strings.alignRight(ms, 3, '0');
+        return secs(sec) + "." + Strings.alignRight(ms, 3, '0');
     }
 
     /**
@@ -685,6 +693,17 @@ public abstract class Times {
      */
     public static String sDTms2(Date d) {
         return format(DF_DATE_TIME_MS2, d);
+    }
+
+    /**
+     * 把时间转换成格式为 yyyy-MM-dd HH:mm:ss.SSS 的字符串
+     * 
+     * @param d
+     *            时间对象
+     * @return 该时间的字符串形式 , 格式为 yyyy-MM-dd HH:mm:ss.SSS
+     */
+    public static String sDTms4(Date d) {
+        return format(DF_DATE_TIME_MS4, d);
     }
 
     /**
@@ -1158,18 +1177,13 @@ public abstract class Times {
      * @return timestamp 时间戳字符串
      */
     public static String sDT2TS(String str, DateFormat df) {
-        String timestamp = null;
-        Date date;
         try {
-            date = df.parse(str);
-            long l = date.getTime();
-            String tmp = String.valueOf(l);
-            timestamp = tmp.substring(0, 10);
+            return "" + (df.parse(str).getTime() / 1000);
         }
         catch (Exception e) {
             e.printStackTrace();
         }
-        return timestamp;
+        return "0";
     }
 
     /**
@@ -1369,8 +1383,7 @@ public abstract class Times {
         if (!isDate(birth)) {
             return "";
         }
-        int month = Integer.parseInt(birth.substring(birth.indexOf("-")
-                                                     + 1,
+        int month = Integer.parseInt(birth.substring(birth.indexOf("-") + 1,
                                                      birth.lastIndexOf("-")));
         int day = Integer.parseInt(birth.substring(birth.lastIndexOf("-") + 1));
         String s = "魔羯水瓶双鱼牡羊金牛双子巨蟹狮子处女天秤天蝎射手魔羯";
@@ -1395,7 +1408,7 @@ public abstract class Times {
         reg.append("-?((0?[1-9])|([1-2][0-9])|(3[01])))|(((0?[469])|(11))");
         reg.append("-?((0?[1-9])|([1-2][0-9])|(30)))|(0?2-?((0?[");
         reg.append("1-9])|(1[0-9])|(2[0-8]))))))");
-        Pattern p = Pattern.compile(reg.toString());
+        Pattern p = Regex.getPattern(reg.toString());
         return p.matcher(date).matches();
     }
 
@@ -1622,5 +1635,30 @@ public abstract class Times {
         }
         cal.add(Calendar.HOUR, hour);
         return cal.getTime();
+    }
+
+    /**
+     * Unix时间戳转Date日期
+     *
+     * @param timestamp
+     *            时间戳
+     * @return 日期
+     */
+    public static Date ts2D(long timestamp) {
+        return new Date(Long.parseLong(timestamp * 1000 + ""));
+    }
+
+    /**
+     * Date日期转Unix时间戳
+     *
+     * @param date 日期
+     * @return 时间戳
+     */
+    public static long d2TS(Date date) {
+        if (Lang.isEmpty(date)) {
+            return getTS();
+        } else {
+            return date.getTime() / 1000;
+        }
     }
 }

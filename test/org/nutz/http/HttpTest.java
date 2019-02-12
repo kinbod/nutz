@@ -14,10 +14,12 @@ public class HttpTest {
     public void testGet() {
         Response response = Http.get("http://nutztest.herokuapp.com/");
         assertNotNull(response);
+        assertNotNull(response.getContent("UTF-8"));
+        assertNotNull(response.getContent());
         assertNotNull(response.getContent());
         assertNotNull(response.getDetail());
         assertNotNull(response.getHeader());
-        assertNotNull(response.getProtocal());
+        assertNotNull(response.getProtocol());
         assertTrue(response.getStatus() > 0);
         assertNotNull(response.getStream());
     }

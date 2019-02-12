@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -27,10 +28,14 @@ import org.nutz.lang.born.Borning;
  * 
  * @author zozoh(zozohtnt@gmail.com)
  */
-@SuppressWarnings("serial")
 public class NutMap extends LinkedHashMap<String, Object> implements NutBean {
 
-    public static NutMap WRAP(Map<String, Object> map) {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+
+	public static NutMap WRAP(Map<String, Object> map) {
         if (null == map)
             return null;
         if (map instanceof NutMap)
@@ -115,11 +120,10 @@ public class NutMap extends LinkedHashMap<String, Object> implements NutBean {
         if (keys.length == 0)
             return new NutMap();
         NutMap re = new NutMap();
-        for (Map.Entry<String, Object> en : this.entrySet()) {
-            String key = en.getKey();
-            if (Lang.contains(keys, key)) {
-                re.put(key, en.getValue());
-            }
+        for (String key : keys) {
+            Object val = this.get(key);
+            if (null != val)
+                re.put(key, val);
         }
         return re;
     }
@@ -155,7 +159,7 @@ public class NutMap extends LinkedHashMap<String, Object> implements NutBean {
         if (Strings.isBlank(regex))
             return this.duplicate();
         boolean isNot = regex.startsWith("!");
-        Pattern p = Pattern.compile(isNot ? regex.substring(1) : regex);
+        Pattern p = Regex.getPattern(isNot ? regex.substring(1) : regex);
         return pickBy(p, isNot);
     }
 
@@ -505,7 +509,16 @@ public class NutMap extends LinkedHashMap<String, Object> implements NutBean {
         Object v = get(key);
         if (null == v)
             return null;
-        return (List) v;
+        List list = (List) v;
+        ListIterator it = list.listIterator();
+        while (it.hasNext()) {
+            Object ele = it.next();
+            if (null != ele && !eleType.isAssignableFrom(ele.getClass())) {
+                Object ele2 = Castors.me().castTo(ele, eleType);
+                it.set(ele2);
+            }
+        }
+        return list;
     }
 
     /**
@@ -897,7 +910,7 @@ public class NutMap extends LinkedHashMap<String, Object> implements NutBean {
 
             final String s = mtc.toString();
             if (s.startsWith("^")) {
-                regex = Pattern.compile(s);
+                regex = Regex.getPattern(s);
             }
             // 不是正则表达式，那么精确匹配字符串
             else {
@@ -958,6 +971,119 @@ public class NutMap extends LinkedHashMap<String, Object> implements NutBean {
     }
 
     public int evalInt(String el) {
-        return (Integer) El.eval(Lang.context(this), el);
+        Object obj = El.eval(Lang.context(this), el);
+        if (obj == null)
+            return 0;
+        if (obj instanceof Number)
+            return ((Number) obj).intValue();
+        return Integer.parseInt(obj.toString());
+    }
+
+    /**
+     * 指定key进行自增操作，并返回结果
+     * 
+     * @param key
+     *            键
+     * @return 自增后结果
+     */
+    public int intIncrement(String key) {
+        return intIncrement(key, 1);
+    }
+
+    /**
+     * 指定key进行增操作，并返回结果
+     * 
+     * @param key
+     *            键
+     * @param number
+     *            数值
+     * @return 增后结果
+     */
+    public int intIncrement(String key, int number) {
+        int val = getInt(key, 0);
+        val += number;
+        setv(key, val);
+        return val;
+    }
+
+    /**
+     * 指定key进行自减操作，并返回结果
+     * 
+     * @param key
+     *            键
+     * @return 自减后结果
+     */
+    public int intDecrement(String key) {
+        return intDecrement(key, 1);
+    }
+
+    /**
+     * 指定key进行减操作，并返回结果
+     * 
+     * @param key
+     *            键
+     * @param number
+     *            数值
+     * @return 减后结果
+     */
+    public int intDecrement(String key, int number) {
+        int val = getInt(key, 0);
+        val -= number;
+        setv(key, val);
+        return val;
+    }
+
+    /**
+     * 指定key进行自增操作，并返回结果
+     * 
+     * @param key
+     *            键
+     * @return 自增后结果
+     */
+    public long longIncrement(String key) {
+        return longIncrement(key, 1);
+    }
+
+    /**
+     * 指定key进行增操作，并返回结果
+     * 
+     * @param key
+     *            键
+     * @param number
+     *            数值
+     * @return 增后结果
+     */
+    public long longIncrement(String key, long number) {
+        long val = getLong(key, 0);
+        val += number;
+        setv(key, val);
+        return val;
+    }
+
+    /**
+     * 指定key进行自减操作，并返回结果
+     * 
+     * @param key
+     *            键
+     * @return 自减后结果
+     */
+    public long longDecrement(String key) {
+        return longDecrement(key, 1);
+    }
+
+    /**
+     * 指定key进行减操作，并返回结果
+     * 
+     * @param key
+     *            键
+     * @param number
+     *            数值
+     * @return 减后结果
+     */
+    public long longDecrement(String key, long number) {
+        long val = getLong(key, 0);
+        val -= number;
+        setv(key, val);
+        return val;
     }
 }

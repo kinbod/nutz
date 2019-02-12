@@ -6,6 +6,11 @@ import java.lang.reflect.Modifier;
 import org.nutz.lang.Mirror;
 import org.nutz.mvc.EntryDeterminer;
 import org.nutz.mvc.annotation.At;
+import org.nutz.mvc.annotation.DELETE;
+import org.nutz.mvc.annotation.GET;
+import org.nutz.mvc.annotation.POST;
+import org.nutz.mvc.annotation.PUT;
+
 /**
  * 入口方法决断器默认实现，与之前版本行为一致</p>
  * 本实现默认继承父类所有入口方法，例如：
@@ -30,12 +35,11 @@ import org.nutz.mvc.annotation.At;
 public class NutEntryDeterminer implements EntryDeterminer {
 
     @Override
+    @SuppressWarnings("unchecked")
     public boolean isEntry(Class<?> module, Method method) {
         if (!Modifier.isPublic(method.getModifiers()) || method.isBridge())
             return false;
-        if (Mirror.getAnnotationDeep(method, At.class) == null)
-            return false;
-        return true;
+        return Mirror.isAnnotationExists(method, At.class, GET.class, POST.class, PUT.class, DELETE.class);
     }
 
 }

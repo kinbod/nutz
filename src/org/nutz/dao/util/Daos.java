@@ -13,7 +13,6 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -42,6 +41,7 @@ import org.nutz.dao.jdbc.ValueAdaptor;
 import org.nutz.dao.pager.Pager;
 import org.nutz.dao.sql.Sql;
 import org.nutz.dao.sql.SqlCallback;
+import org.nutz.dao.util.tables.TablesFilter;
 import org.nutz.lang.Lang;
 import org.nutz.lang.Strings;
 import org.nutz.lang.random.R;
@@ -59,6 +59,7 @@ import org.nutz.trans.Trans;
  * @author wendal(wendal1985@gmail.com)
  * @author cqyunqin
  * @author rekoe(koukou890@qq.com)
+ * @author threefish(306955302@qq.com)
  */
 public abstract class Daos {
 
@@ -256,7 +257,7 @@ public abstract class Daos {
         };
         return Trans.exec(molecule);
     }
-    
+
     public static StringBuilder dataDict(DataSource ds, String... packages) {
         return dataDict(new NutDao(ds), packages);
     }
@@ -349,7 +350,7 @@ public abstract class Daos {
         dao.execute(sql2);
         return sql2.getLong();
     }
-    
+
     /**
      * 查询某sql的结果条数
      * @param dao 用于执行该count方法的dao实例
@@ -406,9 +407,13 @@ public abstract class Daos {
                     mf = en.getField(head.name());
                 _value_places.append("?");
                 values.add(head.value());
-                ValueAdaptor adaptor = Jdbcs.getAdaptorBy(head.value());
-                if (mf != null && mf.getAdaptor() != null)
-                    adaptor = mf.getAdaptor();
+                ValueAdaptor adaptor = head.adaptor();
+                if (adaptor == null) {
+                    if (mf != null && mf.getAdaptor() != null)
+                        adaptor = mf.getAdaptor();
+                    else
+                    	adaptor = Jdbcs.getAdaptorBy(head.value());
+                }
                 adaptors.add(adaptor);
             }
 
@@ -455,18 +460,7 @@ public abstract class Daos {
             if (klass.getAnnotation(Table.class) != null)
                 list.add(klass);
         };
-        Collections.sort(list, new Comparator<Class<?>>() {
-            public int compare(Class<?> prev, Class<?> next) {
-                int links_prev = dao.getEntity(prev).getLinkFields(null).size();
-                int links_next = dao.getEntity(next).getLinkFields(null).size();
-                if (links_prev == links_next)
-                    return 0;
-                return links_prev > links_next ? 1 : -1;
-            }
-            
-        });
-        for (Class<?> klass : list)
-            dao.create(klass, force);
+        createTables(dao,list,force);
     }
 
     /**
@@ -481,6 +475,83 @@ public abstract class Daos {
      */
     public static void createTablesInPackage(Dao dao, Class<?> oneClzInPackage, boolean force) {
         createTablesInPackage(dao, oneClzInPackage.getPackage().getName(), force);
+    }
+
+    /**
+     * 为特定package下带@Table注解的类调用dao.create(XXX.class, force),
+     * 批量建表,优先建立带@ManyMany的表
+     *
+     * @param dao
+     *            Dao实例
+     * @param oneClzInPackage
+     *            使用package中某一个class文件, 可以防止写错pkgName
+     * @param force
+     *            如果表存在,是否先删后建
+     * @param filter
+     *            定义过滤器排除不需要自动创建的表
+     */
+    public static void createTablesInPackage(final Dao dao,  Class<?> oneClzInPackage, boolean force,TablesFilter filter) {
+        createTablesInPackage(dao, oneClzInPackage.getPackage().getName(), force,filter);
+    }
+    /**
+     * 为特定package下带@Table注解的类调用dao.create(XXX.class, force),
+     * 批量建表,优先建立带@ManyMany的表
+     *
+     * @param dao
+     *            Dao实例
+     * @param packageName
+     *            package名称,自动包含子类
+     * @param force
+     *            如果表存在,是否先删后建
+     * @param filter
+     *            定义过滤器排除不需要自动创建的表
+     */
+    public static void createTablesInPackage(final Dao dao, String packageName, boolean force,TablesFilter filter) {
+        List<Class<?>> list = new ArrayList<Class<?>>();
+        for(Class<?> klass: Scans.me().scanPackage(packageName)) {
+            Table table = klass.getAnnotation(Table.class);
+            if (table != null && filter.match(klass,table))
+                list.add(klass);
+        }
+        createTables(dao,list,force);
+    }
+
+    /**
+     *
+     * 批量建表,优先建立带@ManyMany的表
+     *
+     * @param dao
+     *            Dao实例
+     * @param list
+     *            需要自动创建的表
+     * @param force
+     *            如果表存在,是否先删后建
+     */
+    private static void createTables(final Dao dao, List<Class<?>> list, boolean force){
+        Collections.sort(list, new Comparator<Class<?>>() {
+            public int compare(Class<?> prev, Class<?> next) {
+                int links_prev = dao.getEntity(prev).getLinkFields(null).size();
+                int links_next = dao.getEntity(next).getLinkFields(null).size();
+                if (links_prev == links_next)
+                    return 0;
+                return links_prev > links_next ? 1 : -1;
+            }
+
+        });
+        ArrayList<Exception> es = new ArrayList<Exception>();
+        for (Class<?> klass : list)
+            try {
+                dao.create(klass, force);
+            }
+            catch (Exception e) {
+                es.add(new RuntimeException("class=" + klass.getName(), e));
+            }
+        if (es.size() > 0) {
+            for (Exception exception : es) {
+                log.debug(exception.getMessage(), exception);
+            }
+            throw (RuntimeException)es.get(0);
+        }
     }
 
     private static Class<?>[] iz = new Class<?>[]{Dao.class};
@@ -568,32 +639,9 @@ public abstract class Daos {
                 flag = true;
                 continue;
             }
-            if (matcher.isIgnoreId() && mf.isId())
+            if (!matcher.match(mf, obj))
                 continue;
-            if (matcher.isIgnoreName() && mf.isName())
-                continue;
-            if (matcher.isIgnorePk() && mf.isCompositePk())
-                continue;
-            Object val = mf.getValue(obj);
-            if (val == null) {
-                if (matcher.isIgnoreNull())
-                    continue;
-            } else {
-                if (matcher.isIgnoreZero()
-                    && val instanceof Number
-                    && ((Number) val).doubleValue() == 0.0) {
-                    continue;
-                }
-                if (matcher.isIgnoreDate() && val instanceof Date) {
-                    continue;
-                }
-                if (matcher.isIgnoreBlankStr()
-                    && val instanceof CharSequence
-                    && Strings.isBlank((CharSequence) val)) {
-                    continue;
-                }
-            }
-            callback.invoke(mf, val);
+            callback.invoke(mf, mf.getValue(obj));
             flag = true;
         }
         return flag;
@@ -684,13 +732,18 @@ public abstract class Daos {
                                  final boolean del,
                                  final boolean checkIndex,
                                  final Object tableName) {
+        migration(dao, dao.getEntity(klass), add, del, checkIndex, tableName);
+    }
+    public static void migration(Dao dao,
+                                 final Entity<?> en,
+                                 final boolean add,
+                                 final boolean del,
+                                 final boolean checkIndex,
+                                 final Object tableName) {
         final JdbcExpert expert = dao.getJdbcExpert();
         if (tableName != null && Strings.isNotBlank(tableName.toString())) {
             dao = ext(dao, tableName);
         }
-        final Entity<?> en = dao.getEntity(klass);
-        if (!dao.exists(klass))
-            return;
         final List<Sql> sqls = new ArrayList<Sql>();
         final Set<String> _indexs = new HashSet<String>();
         dao.run(new ConnCallback() {
@@ -801,19 +854,26 @@ public abstract class Daos {
         List<String> delIndexs = new ArrayList<String>();
         List<EntityIndex> indexs = en.getIndexes();
         for (EntityIndex index : indexs) {
-            sqls.add(dao.getJdbcExpert().createIndexSql(en, index));
+            String indexName = index.getName(en);
+            // 索引存在, 不要动
+            if (indexsHis.contains(indexName)) {
+                indexsHis.remove(indexName);
+            }
+            // 不存在,则新增
+            else {
+                sqls.add(dao.getJdbcExpert().createIndexSql(en, index));
+            }
         }
-        if (!Lang.isEmpty(sqls)) {
-            uis.setSqlsAdd(sqls.toArray(new Sql[0]));
-        }
+        uis.setSqlsAdd(sqls.toArray(new Sql[sqls.size()]));
+        // 剩余的,就是要删除的
         Iterator<String> iterator = indexsHis.iterator();
         List<Sql> delSqls = new ArrayList<Sql>();
         while (iterator.hasNext()) {
-            String index = iterator.next();
-            if (delIndexs.contains(index) || Lang.equals("PRIMARY", index)) {
+            String indexName = iterator.next();
+            if (delIndexs.contains(indexName) || Lang.equals("PRIMARY", indexName)) {
                 continue;
             }
-            MappingField mf = en.getColumn(index);
+            MappingField mf = en.getColumn(indexName);
             if (mf != null) {
                 if (mf.isName())
                     continue;
@@ -821,16 +881,14 @@ public abstract class Daos {
             if (dao.meta().isSqlServer()) {
                 delSqls.add(Sqls.createf("DROP INDEX %s.%s",
                                          getTableName(dao, en, t),
-                                         index));
+                                         indexName));
             } else {
                 delSqls.add(Sqls.createf("ALTER TABLE %s DROP INDEX %s",
                                          getTableName(dao, en, t),
-                                         index));
+                                         indexName));
             }
         }
-        if (!Lang.isEmpty(delSqls)) {
-            uis.setSqlsDel(Lang.collection2array(delSqls));
-        }
+        uis.setSqlsDel(delSqls.toArray(new Sql[delSqls.size()]));
         return uis;
     }
 
@@ -1022,11 +1080,46 @@ public abstract class Daos {
 
     /** 是否把字段名给变成大写 */
     public static boolean FORCE_UPPER_COLUMN_NAME = false;
-    
+
     public static boolean FORCE_HUMP_COLUMN_NAME = false;
 
     /** varchar 字段的默认字段长度 */
     public static int DEFAULT_VARCHAR_WIDTH = 128;
+
+    /** Table&View名称生成器 */
+    public static interface NameMaker {
+        String make(Class<?> klass);
+    }
+    /** 默认的Table名称生成器 */
+    private static NameMaker tableNameMaker = new NameMaker() {
+        @Override
+        public String make(Class<?> klass) {
+            return Strings.lowerWord(klass.getSimpleName(), '_');
+        }
+    };
+    /** 默认的View名称生成器 */
+    private static NameMaker viewNameMaker = new NameMaker() {
+        @Override
+        public String make(Class<?> klass) {
+            return Strings.lowerWord(klass.getSimpleName(), '_');
+        }
+    };
+
+    public static NameMaker getTableNameMaker() {
+        return tableNameMaker;
+    }
+
+    public static void setTableNameMaker(NameMaker tableNameMaker) {
+        Daos.tableNameMaker = tableNameMaker;
+    }
+
+    public static NameMaker getViewNameMaker() {
+        return viewNameMaker;
+    }
+
+    public static void setViewNameMaker(NameMaker viewNameMaker) {
+        Daos.viewNameMaker = viewNameMaker;
+    }
 }
 
 class ExtDaoInvocationHandler implements InvocationHandler {

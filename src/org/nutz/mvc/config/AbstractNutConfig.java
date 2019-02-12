@@ -1,5 +1,6 @@
 package org.nutz.mvc.config;
 
+import java.io.File;
 import java.util.Enumeration;
 import java.util.LinkedList;
 import java.util.List;
@@ -39,6 +40,8 @@ public abstract class AbstractNutConfig implements NutConfig {
     
     protected ViewMaker[] viewMakers;
     
+    protected Class<?> mainModule;
+    
     public AbstractNutConfig(ServletContext context) {
         Scans.me().init(context);
         Json.clearEntityCache();
@@ -77,7 +80,11 @@ public abstract class AbstractNutConfig implements NutConfig {
         String webinf = getServletContext().getRealPath("/WEB-INF/");
         if (webinf == null) {
             log.info("/WEB-INF/ not Found?!");
-            return "";
+            if (new File("src/main/webapp").exists())
+                return new File("src/main/webapp").getAbsolutePath();
+            if (new File("src/main/resources/webapp").exists())
+                return new File("src/main/resources/webapp").getAbsolutePath();
+            return "./webapp";
         }
         String root = getServletContext().getRealPath("/").replace('\\', '/');
         if (root.endsWith("/"))
@@ -119,9 +126,10 @@ public abstract class AbstractNutConfig implements NutConfig {
     }
 
     public Class<?> getMainModule() {
+        if (mainModule != null)
+            return mainModule;
         String name = Strings.trim(getInitParameter("modules"));
         try {
-            Class<?> mainModule = null;
             if (Strings.isBlank(name))
             	throw new NutConfigException("You need declare 'modules' parameter in your context configuration file or web.xml ! Only found -> " + getInitParameterNames());
             mainModule = Lang.loadClass(name);
@@ -177,4 +185,8 @@ public abstract class AbstractNutConfig implements NutConfig {
 	public ViewMaker[] getViewMakers() {
 		return viewMakers;
 	}
+	
+	public void setMainModule(Class<?> mainModule) {
+        this.mainModule = mainModule;
+    }
 }

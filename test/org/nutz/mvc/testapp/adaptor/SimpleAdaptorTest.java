@@ -7,6 +7,7 @@ import java.util.TimeZone;
 
 import org.junit.Test;
 import org.nutz.json.Json;
+import org.nutz.json.JsonFormat;
 import org.nutz.lang.Times;
 import org.nutz.lang.util.NutMap;
 import org.nutz.mvc.testapp.BaseWebappTest;
@@ -194,5 +195,22 @@ public class SimpleAdaptorTest extends BaseWebappTest {
         Issue1277 issue = Json.fromJson(Issue1277.class, str);
         assertEquals(123, issue.age);
         //assertEquals("1495667792000", resp.getContent());
+    }
+    
+
+    @Test
+    public void re_view_with_NutMap() {
+        resp = post("/adaptor/issue13xx", new NutMap("age", "123"));
+        assertEquals(200, resp.getStatus());
+        String str = resp.getContent();
+        assertEquals(Json.toJson(new NutMap("id", 1), JsonFormat.compact()), str);
+    }
+    
+    @Test
+    public void test_localdt() {
+        resp = post("/adaptor/jdk8/localdt", new NutMap("date", "2018-02-20 21:11:51"));
+        assertEquals(200, resp.getStatus());
+        String str = resp.getContent();
+        assertEquals("2018-02-20T21:11:51", str);
     }
 }

@@ -173,11 +173,15 @@ public class NutLoading implements Loading {
          */
         ActionInfo mainInfo = Loadings.createInfo(mainModule);
 
+        // fix issue #1337
+        Determiner ann = mainModule.getAnnotation(Determiner.class);
+        EntryDeterminer determiner = null == ann ? new NutEntryDeterminer() : Loadings.evalObj(config, ann.value(), ann.args());
+
         /*
          * 准备要加载的模块列表
          */
         // TODO 为什么用Set呢? 用List不是更快吗?
-        Set<Class<?>> modules = Loadings.scanModules(ioc, mainModule);
+        Set<Class<?>> modules = getModuleClasses(ioc, mainModule, determiner);
 
         if (modules.isEmpty()) {
             if (log.isWarnEnabled())
@@ -188,18 +192,15 @@ public class NutLoading implements Loading {
         /*
          * 分析所有的子模块
          */
-        // fix issue #1337
-        Determiner ann = mainModule.getAnnotation(Determiner.class);
-        EntryDeterminer determiner = null == ann ? new NutEntryDeterminer() : Loadings.evalObj(config, ann.value(), ann.args());
         if (log.isDebugEnabled())
             log.debugf("Use %s as EntryMethodDeterminer", determiner.getClass().getName());
         for (Class<?> module : modules) {
-            ActionInfo moduleInfo = Loadings.createInfo(module).mergeWith(mainInfo);
+            ActionInfo moduleInfo = Loadings.createInfo(module).mergeWith(mainInfo, true);
             for (Method method : module.getMethods()) {
                 if (!determiner.isEntry(module, method))
                     continue;
                 // 增加到映射中
-                ActionInfo info = Loadings.createInfo(method).mergeWith(moduleInfo);
+                ActionInfo info = Loadings.createInfo(method).mergeWith(moduleInfo, false);
                 info.setViewMakers(makers);
                 mapping.add(maker, info, config);
                 atMethods++;
@@ -275,7 +276,7 @@ public class NutLoading implements Loading {
             Setup setup = Loadings.evalObj(config, sb.value(), sb.args());
             config.setAttributeIgnoreNull(Setup.class.getName(), setup);
             setup.init(config);
-        } else if (config.getIoc() != null && config.getIoc().has(Setup.IOCNAME)) {
+        } else if (config.getIoc() != null) {
             String[] names = config.getIoc().getNames();
             Arrays.sort(names);
             boolean flag = true;
@@ -286,8 +287,8 @@ public class NutLoading implements Loading {
                         if (log.isInfoEnabled())
                             log.info("Setup application...");
                     }
-                    log.debug("load Setup from Ioc by name=" + Setup.IOCNAME);
-                    Setup setup = config.getIoc().get(Setup.class, Setup.IOCNAME);
+                    log.debug("load Setup from Ioc by name=" + name);
+                    Setup setup = config.getIoc().get(Setup.class, name);
                     config.setAttributeIgnoreNull(Setup.class.getName(), setup);
                     setup.init(config);
                 }
@@ -346,15 +347,14 @@ public class NutLoading implements Loading {
                     makers.add(Mirror.me(vms.value()[i]).born());
                 }
             }
-        } else {
-            if (ioc != null) {
-                String[] names = ioc.getNames();
-                Arrays.sort(names);
-                for (String name : ioc.getNames()) {
-                    if (name != null && name.startsWith(ViewMaker.IOCNAME)) {
-                        log.debug("add ViewMaker from Ioc by name=" + name);
-                        makers.add(ioc.get(ViewMaker.class, name));
-                    }
+        }
+        if (ioc != null) {
+            String[] names = ioc.getNames();
+            Arrays.sort(names);
+            for (String name : ioc.getNames()) {
+                if (name != null && name.startsWith(ViewMaker.IOCNAME)) {
+                    log.debug("add ViewMaker from Ioc by name=" + name);
+                    makers.add(ioc.get(ViewMaker.class, name));
                 }
             }
         }
@@ -445,4 +445,7 @@ public class NutLoading implements Loading {
             log.infof("Nutz.Mvc[%s] is down in %sms", config.getAppName(), sw.getDuration());
     }
 
+    protected Set<Class<?>> getModuleClasses(Ioc ioc, Class<?> mainModule, EntryDeterminer determiner) {
+        return Loadings.scanModules(ioc, mainModule, determiner);
+    }
 }

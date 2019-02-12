@@ -14,6 +14,7 @@ import java.io.PrintStream;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.Writer;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.GenericArrayType;
@@ -44,6 +45,9 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import javax.crypto.Mac;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import javax.servlet.http.HttpServletRequest;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.ParserConfigurationException;
@@ -52,6 +56,7 @@ import org.nutz.castor.Castors;
 import org.nutz.castor.FailToCastObjectException;
 import org.nutz.dao.entity.annotation.Column;
 import org.nutz.json.Json;
+import org.nutz.lang.Encoding;
 import org.nutz.lang.reflect.ReflectTool;
 import org.nutz.lang.stream.StringInputStream;
 import org.nutz.lang.stream.StringOutputStream;
@@ -59,6 +64,7 @@ import org.nutz.lang.stream.StringWriter;
 import org.nutz.lang.util.Context;
 import org.nutz.lang.util.NutMap;
 import org.nutz.lang.util.NutType;
+import org.nutz.lang.util.Regex;
 import org.nutz.lang.util.SimpleContext;
 
 /**
@@ -1539,7 +1545,7 @@ public abstract class Lang {
     /**
      * 继续 each 循环，如果再递归，则停止递归
      */
-    public static void Continue() throws ExitLoop {
+    public static void Continue() throws ContinueLoop {
         throw new ContinueLoop();
     }
 
@@ -2595,8 +2601,8 @@ public abstract class Lang {
         if (source == null || source.isEmpty())
             return dst;
 
-        Pattern includePattern = include == null ? null : Pattern.compile(include);
-        Pattern excludePattern = exclude == null ? null : Pattern.compile(exclude);
+        Pattern includePattern = include == null ? null : Regex.getPattern(include);
+        Pattern excludePattern = exclude == null ? null : Regex.getPattern(exclude);
 
         for (Entry<String, Object> en : source.entrySet()) {
             String key = en.getKey();
@@ -2688,8 +2694,8 @@ public abstract class Lang {
             throw new IllegalArgumentException("origin is null");
         if (target == null)
             throw new IllegalArgumentException("target is null");
-        Pattern at = active == null ? null : Pattern.compile(active);
-        Pattern lo = lock == null ? null : Pattern.compile(lock);
+        Pattern at = active == null ? null : Regex.getPattern(active);
+        Pattern lo = lock == null ? null : Regex.getPattern(lock);
         Mirror<Object> originMirror = Mirror.me(origin);
         Mirror<T> targetMirror = Mirror.me(target);
         Field[] fields = targetMirror.getFields();
@@ -2811,5 +2817,67 @@ public abstract class Lang {
                 return false;
             return ver.contains("-ea");
         }
+        
+        /**
+         * 获取进程id
+         * @param fallback 如果获取失败,返回什么呢?
+         * @return 进程id
+         */
+        public static String getProcessId(final String fallback) {
+            final String jvmName = ManagementFactory.getRuntimeMXBean().getName();
+            final int index = jvmName.indexOf('@');
+            if (index < 1) {
+                return fallback;
+            }
+            try {
+                return Long.toString(Long.parseLong(jvmName.substring(0, index)));
+            }
+            catch (NumberFormatException e) {
+            }
+            return fallback;
+        }
+    }
+    
+    /**
+     * 判断一个对象是否不为空。它支持如下对象类型：
+     * <ul>
+     * <li>null : 一定为空
+     * <li>数组
+     * <li>集合
+     * <li>Map
+     * <li>其他对象 : 一定不为空
+     * </ul>
+     *
+     * @param obj
+     *            任意对象
+     * @return 是否为空
+     */
+    public static boolean isNotEmpty(Object obj) {
+        return !isEmpty(obj);
+    }
+
+    /**
+     * 获取指定字符串的 HmacMD5 值
+     *
+     * @param data   字符串
+     * @param secret 密钥
+     * @return 指定字符串的 HmacMD5 值
+     */
+    public static String hmacmd5(String data, String secret) {
+        if (isEmpty(data))
+            throw new NullPointerException("data is null");
+        if (isEmpty(secret))
+            throw new NullPointerException("secret is null");
+        byte[] bytes = null;
+        try {
+            SecretKey secretKey = new SecretKeySpec(secret.getBytes(Encoding.UTF8), "HmacMD5");
+            Mac mac = Mac.getInstance(secretKey.getAlgorithm());
+            mac.init(secretKey);
+            bytes = mac.doFinal(data.getBytes(Encoding.UTF8));
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw Lang.wrapThrow(e);
+        }
+        return fixedHexString(bytes);
     }
 }

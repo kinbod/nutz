@@ -14,6 +14,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.StringWriter;
 import java.io.Writer;
+import java.text.ParseException;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -34,6 +37,7 @@ import org.nutz.ioc.meta.IocValue;
 import org.nutz.json.JsonShape.Type;
 import org.nutz.json.generic.IntKeyMap;
 import org.nutz.json.impl.JsonRenderImpl;
+import org.nutz.json.meta.EnumWithFields;
 import org.nutz.json.meta.Issue1199;
 import org.nutz.json.meta.JA;
 import org.nutz.json.meta.JB;
@@ -45,17 +49,39 @@ import org.nutz.json.meta.JX;
 import org.nutz.json.meta.Msg;
 import org.nutz.json.meta.MyDate2StringCastor;
 import org.nutz.json.meta.OuterClass;
+import org.nutz.json.meta.PojoWithLocalDateTime;
 import org.nutz.lang.Files;
 import org.nutz.lang.Lang;
 import org.nutz.lang.Streams;
+import org.nutz.lang.Times;
 import org.nutz.lang.stream.StringInputStream;
 import org.nutz.lang.stream.StringOutputStream;
 import org.nutz.lang.util.NutMap;
 import org.nutz.lang.util.NutType;
 import org.nutz.lang.util.PType;
 
-@SuppressWarnings({"unchecked"})
+@SuppressWarnings({ "unchecked" })
 public class JsonTest {
+
+    class Issue1393 {
+        final String name;
+        final int age;
+
+        public Issue1393(String name, int age) {
+            this.name = name;
+            this.age = age;
+        }
+    }
+
+    /**
+     * for issue https://github.com/nutzam/nutz/issues/1393
+     */
+    @Test
+    public void test_final_field() {
+        Issue1393 obj = new Issue1393("test1", 99);
+        String json = Json.toJson(obj, JsonFormat.compact());
+        assertEquals("{\"name\":\"test1\",\"age\":99}", json);
+    }
 
     @JsonShape(Type.OBJECT)
     public static enum TT {
@@ -116,6 +142,7 @@ public class JsonTest {
         assertEquals("\"K\"", Json.toJson(K.K));
         String expected = "{\n" + "   \"name\": \"t\",\n" + "   \"index\": 1\n" + "}";
         assertEquals(expected, Json.toJson(TT.T));
+        assertEquals("\"T\"",Json.toJson(TT.T,JsonFormat.full().ignoreJsonShape()));
     }
 
     @Test
@@ -1113,7 +1140,7 @@ public class JsonTest {
         assertEquals(METHOD.valueOf("POST"), map.get("post"));
         Json.fromJson(METHOD.class, "'POST'");
     }
-    
+
     @Test
     public void test_map_use_int_key_issue_1332() {
         String str = "{abc : {1:1}}";
@@ -1121,4 +1148,62 @@ public class JsonTest {
         System.out.println(map);
         assertTrue(map.getAbc().containsKey(1));
     }
+
+    @Test
+    public void test_t() {
+        System.out.println(Json.toJson(new NutMap("abc", EnumWithFields.STAY_PUSH)));
+    }
+    
+    @Test
+    public void test_new_toJson() {
+        System.out.println(Json.toJson(new NutMap("name", "t").addv("index", 1)));
+        System.out.println(Json.toJson(new NutMap("date", LocalDateTime.now())));
+    }
+    
+
+    @Test
+    public void test_locale_fromJson() {
+        LocalDateTime dt = Json.fromJson(LocalDateTime.class, "'2018-02-20 21:53:39'");
+        System.out.println(dt);
+        assertNotNull(dt);
+        
+        PojoWithLocalDateTime pojo = Json.fromJson(PojoWithLocalDateTime.class, "{localdt:'2018-02-20 21:53:39'}");
+        System.out.println(pojo.localdt);
+        assertNotNull(pojo.localdt);
+    }
+
+
+    @Test
+    public void test_json_lost_exception_message() throws Exception {
+
+        PojoABC pojo = new PojoABC();
+        try {
+            Json.toJson(pojo);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            assertEquals(e.getMessage(), pojo.message);
+
+        }
+    }
+
+
+    public static class PojoABC {
+
+        String message = "this is my message";
+
+        public String toJson() {
+            throw new RuntimeException(message);
+        }
+
+    }
+
+	
+	@Test
+	public void test_instant_field() throws ParseException {
+		Instant instant = Times.parse("yyyy-MM-dd HH:mm:ss", "2018-06-30 18:27:10").toInstant();
+		String json = Json.toJson(instant,JsonFormat.compact().setDateFormat("yyyy-MM-dd HH:mm:ss"));
+		assertEquals("\"2018-06-30 18:27:10\"", json);
+	}
+
 }

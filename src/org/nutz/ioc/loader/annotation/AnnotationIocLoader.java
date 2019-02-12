@@ -1,5 +1,6 @@
 package org.nutz.ioc.loader.annotation;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -8,7 +9,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
-import org.nutz.castor.Castors;
 import org.nutz.ioc.IocException;
 import org.nutz.ioc.IocLoader;
 import org.nutz.ioc.IocLoading;
@@ -41,26 +41,24 @@ public class AnnotationIocLoader implements IocLoader {
     private HashMap<String, IocObject> map = new HashMap<String, IocObject>();
     
     protected String[] packages;
+    
+    public AnnotationIocLoader() {
+        packages = new String[0];
+    }
 
     public AnnotationIocLoader(String... packages) {
-        for (String packageZ : packages) {
-            for (Class<?> classZ : Scans.me().scanPackage(packageZ))
+        for (String pkg : packages) {
+        	log.infof(" > scan '%s'", pkg);
+            for (Class<?> classZ : Scans.me().scanPackage(pkg))
                 addClass(classZ);
         }
-        if (map.size() > 0) {
-            if (log.isInfoEnabled())
-                log.infof("Found %s classes in %s base-packages!\nbeans = %s",
-                          map.size(),
-                          packages.length,
-                          Castors.me().castToString(map.keySet()));
-        } else {
-            log.warn("NONE Annotation-Class found!! Check your ioc configure!! packages="
-                     + Arrays.toString(packages));
+        if (map.isEmpty()) {
+            log.warnf("NONE @IocBean found!! Check your ioc configure!! packages=%s", Arrays.toString(packages));
         }
         this.packages = packages;
     }
 
-    protected void addClass(Class<?> classZ) {
+    public void addClass(Class<?> classZ) {
         if (classZ.isInterface()
             || classZ.isMemberClass()
             || classZ.isEnum()
@@ -72,9 +70,6 @@ public class AnnotationIocLoader implements IocLoader {
             return;
         IocBean iocBean = classZ.getAnnotation(IocBean.class);
         if (iocBean != null) {
-            if (log.isDebugEnabled())
-                log.debugf("Found @IocBean : %s", classZ);
-
             // 采用 @IocBean->name
             String beanName = iocBean.name();
             if (Strings.isBlank(beanName)) {
@@ -100,6 +95,8 @@ public class AnnotationIocLoader implements IocLoader {
             IocObject iocObject = new IocObject();
             iocObject.setType(classZ);
             map.put(beanName, iocObject);
+            
+            log.infof("   > add '%-40s' - %s", beanName, classZ.getName());
 
             iocObject.setSingleton(iocBean.singleton());
             if (!Strings.isBlank(iocBean.scope()))
@@ -136,9 +133,16 @@ public class AnnotationIocLoader implements IocLoader {
                 iocField.setName(field.getName());
                 IocValue iocValue;
                 if (Strings.isBlank(inject.value())) {
-                    iocValue = new IocValue();
-                    iocValue.setType(IocValue.TYPE_REFER_TYPE);
-                    iocValue.setValue(field);
+                    if (field.getName().equals("ioc")) {
+                        iocValue = new IocValue();
+                        iocValue.setType(IocValue.TYPE_REFER);
+                        iocValue.setValue("$ioc");
+                    }
+                    else {
+                        iocValue = new IocValue();
+                        iocValue.setType(IocValue.TYPE_REFER_TYPE);
+                        iocValue.setValue(field);
+                    }
                 } else
                     iocValue = Iocs.convert(inject.value(), true);
                 iocField.setValue(iocValue);
@@ -254,11 +258,20 @@ public class AnnotationIocLoader implements IocLoader {
 
         List<String> paramNames = MethodParamNamesScaner.getParamNames(method);
         Class<?>[] paramTypes = method.getParameterTypes();
+        Annotation[][] anns = method.getParameterAnnotations();
         for (int i = 0; i < paramTypes.length; i++) {
             Class<?> paramType = paramTypes[i];
             String paramName = (paramNames != null && (paramNames.size() >= (i - 1))) ? paramNames.get(i) : "arg" + i;
             IocValue ival = new IocValue();
-            Inject inject = paramType.getAnnotation(Inject.class);
+            Inject inject = null;
+            if (anns[i] != null && anns[i].length > 0) {
+                for (Annotation anno : anns[i]) {
+                    if (anno instanceof Inject) {
+                        inject = (Inject)anno;
+                        break;
+                    }
+                }
+            }
             if (inject == null || Strings.isBlank(inject.value())) {
                 ival.setType(IocValue.TYPE_REFER_TYPE);
                 ival.setValue(paramName + "#" + paramType.getName());
